@@ -83,3 +83,50 @@ def test_html_and_cli(tmp_path):
     html = out.read_text()
     assert "plotly" in html and '"names": ["cost", "co2"]' in html
     assert html.count("[") > 31
+
+
+def test_series_variables_in_report(tmp_path):
+    df = pd.DataFrame(convex_front(11), columns=["cost", "co2"])
+    for y in range(2024, 2027):
+        df[y] = np.arange(11) * (y - 2023)
+    front = Front.from_dataframe(df, {"cost": "min", "co2": "min"}, variables=[2024, 2025, 2026],
+                                 series=True, var_label="MW")
+    assert front.var_names == ["2024", "2025", "2026"] and front.nondominated().series
+    html = front.to_html(tmp_path / "r.html").read_text()
+    assert '"series": true' in html and '"varLabel": "MW"' in html
+
+
+def test_negated_columns_are_flipped():
+    df = pd.DataFrame({"cost": [1, 2, 3], "neg_energy": [-10, -20, -30]})
+    front = Front.from_dataframe(df, {"cost": "min", "neg_energy": "max"}, negated=["neg_energy"])
+    assert front.F[:, 1].tolist() == [10, 20, 30]
+    assert len(front.nondominated()) == 3
+
+
+def test_excel_single_sheet(tmp_path):
+    df = pd.DataFrame(convex_front(11), columns=["cost", "co2"])
+    df["design"] = range(11)
+    path = tmp_path / "r.xlsx"
+    df.to_excel(path, index=False)
+    front = Front.from_excel(path, {"cost": "min", "co2": "min"}, variables=["design"])
+    assert len(front) == 11 and front.var_names == ["design"]
+
+
+def test_excel_split_sheets_with_id(tmp_path):
+    obj = pd.DataFrame(convex_front(11), columns=["cost", "co2"])
+    obj.insert(0, "id", range(11))
+    sols = pd.DataFrame({"id": list(reversed(range(11))), "2030": range(11), "2040": range(11)})
+    path = tmp_path / "r.xlsx"
+    with pd.ExcelWriter(path) as w:
+        obj.to_excel(w, sheet_name="objectives", index=False)
+        sols.to_excel(w, sheet_name="decisions", index=False)
+    front = Front.from_excel(path, {"cost": "min", "co2": "min"}, sheet="objectives",
+                             variables_sheet="decisions", on="id", series=True)
+    assert front.var_names == ["2030", "2040"] and front.series
+    # rows were matched by id, not by position
+    assert front.X[0].tolist() == [10, 10]
+
+
+def test_missing_column_message():
+    with pytest.raises(KeyError, match="Available"):
+        Front.from_dataframe(pd.DataFrame({"a": [1]}), {"b": "min"})

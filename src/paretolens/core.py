@@ -12,9 +12,13 @@ class Front:
     names   : objective names, e.g. ["cost", "co2", "copper"]
     senses  : "min" or "max" for each objective (default: all "min")
     X       : optional decision variables, shape (n_points, n_vars)
+    series  : True if X is an ordered series (e.g. capacity added each year), so the
+              report draws each solution's X as a line instead of listing the values
+    var_label : y-axis label for that line, e.g. "New capacity (MW)"
     """
 
-    def __init__(self, F, names=None, senses=None, X=None, var_names=None, units=None):
+    def __init__(self, F, names=None, senses=None, X=None, var_names=None, units=None,
+                 series=False, var_label=None):
         self.F = np.atleast_2d(np.asarray(F, dtype=float))
         n, m = self.F.shape
         self.names = list(names) if names is not None else [f"f{i + 1}" for i in range(m)]
@@ -34,26 +38,71 @@ class Front:
                 f"x{i + 1}" for i in range(self.X.shape[1])]
         else:
             self.var_names = []
+        self.series = bool(series) and self.X is not None
+        self.var_label = var_label or "value"
 
     # ---------- loading ----------
 
     @classmethod
-    def from_dataframe(cls, df, objectives, variables=None, units=None):
+    def from_dataframe(cls, df, objectives, variables=None, negated=None, units=None,
+                       series=False, var_label=None):
         """
+        One row per solution.
+
         objectives: {"column": "min" | "max"}, in the order you want them
         variables : optional list of decision-variable columns to carry along
+        negated   : columns saved with their sign flipped, as pymoo does when you
+                    maximise by minimising -f. They are flipped back on loading.
         """
         names = list(objectives)
+        missing = [c for c in names + list(variables or []) if c not in df.columns]
+        if missing:
+            raise KeyError(f"columns not found: {missing}. Available: {list(df.columns)}")
+        F = df[names].to_numpy(dtype=float).copy()
+        for c in negated or []:
+            if c not in names:
+                raise KeyError(f"negated column {c!r} is not one of the objectives")
+            F[:, names.index(c)] *= -1
         X = df[variables].to_numpy() if variables else None
-        return cls(df[names].to_numpy(), names, [objectives[k] for k in names],
-                   X=X, var_names=variables, units=units)
+        return cls(F, names, [objectives[k] for k in names],
+                   X=X, var_names=[str(v) for v in variables] if variables else None,
+                   units=units, series=series, var_label=var_label)
 
     @classmethod
-    def from_csv(cls, path, objectives, variables=None, units=None, **read_kwargs):
-        return cls.from_dataframe(pd.read_csv(path, **read_kwargs), objectives, variables, units)
+    def from_csv(cls, path, objectives, variables=None, negated=None, units=None,
+                 series=False, var_label=None, **read_kwargs):
+        """Same as from_dataframe, reading a CSV with one row per solution."""
+        return cls.from_dataframe(pd.read_csv(path, **read_kwargs), objectives, variables,
+                                  negated, units, series, var_label)
 
     @classmethod
-    def from_pymoo(cls, res, names=None, senses=None, var_names=None, units=None):
+    def from_excel(cls, path, objectives, sheet=0, variables=None, variables_sheet=None,
+                   on=None, negated=None, units=None, series=False, var_label=None):
+        """
+        Read an Excel file with one row per solution.
+
+        Simple case: objectives (and optionally variables) are columns in one sheet.
+        Split case : objectives in `sheet`, decision variables in `variables_sheet`,
+                     matched row by row through a shared id column `on`. If
+                     `variables` is not given, every other column of that sheet is used.
+        """
+        df = pd.read_excel(path, sheet_name=sheet)
+        if variables_sheet is not None:
+            xv = pd.read_excel(path, sheet_name=variables_sheet)
+            if on is None:
+                if len(xv) != len(df):
+                    raise ValueError("sheets have different row counts; pass `on` with the id column")
+                xv = xv.set_index(df.index)
+                df = pd.concat([df, xv.drop(columns=[c for c in xv.columns if c in df.columns])], axis=1)
+            else:
+                df = df.merge(xv, on=on, suffixes=("", "_var"))
+            if variables is None:
+                variables = [c for c in xv.columns if c != on and c not in objectives]
+        return cls.from_dataframe(df, objectives, variables, negated, units, series, var_label)
+
+    @classmethod
+    def from_pymoo(cls, res, names=None, senses=None, var_names=None, units=None,
+                   series=False, var_label=None):
         """
         Build from a pymoo Result. pymoo always minimises, so for an objective you
         maximised by returning -f, pass senses=[..., "max", ...] and the sign is undone.
@@ -66,7 +115,8 @@ class Front:
         X = getattr(res, "X", None)
         if X is not None and np.asarray(X).dtype == object:
             X = None                                   # mixed-variable results: skip
-        return cls(F, names, senses, X=X, var_names=var_names, units=units)
+        return cls(F, names, senses, X=X, var_names=var_names, units=units,
+                   series=series, var_label=var_label)
 
     # ---------- basic views ----------
 
@@ -92,7 +142,8 @@ class Front:
 
     def _subset(self, mask):
         return Front(self.F[mask], self.names, self.senses,
-                     None if self.X is None else self.X[mask], self.var_names or None, self.units)
+                     None if self.X is None else self.X[mask], self.var_names or None, self.units,
+                     self.series, self.var_label)
 
     def nondominated(self):
         """Drop any dominated points (useful if you load a whole population)."""

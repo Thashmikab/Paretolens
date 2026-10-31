@@ -23,6 +23,8 @@ def write_html(front, path, title="Pareto front explorer", weights=None):
         "X": _clean(front.X) if front.X is not None else None,
         "varNames": front.var_names,
         "knee": front.knee(),
+        "series": front.series,
+        "varLabel": front.var_label,
         "weights": [float(x) for x in w],
     }
     page = (TEMPLATE
@@ -63,6 +65,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
 #scatter,#parcoords{width:100%;height:440px}
 #parcoords{height:380px}
+#pathway{width:100%;height:340px}
 table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
 th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
 th:first-child,td:first-child{text-align:left}
@@ -105,6 +108,7 @@ tbody tr{cursor:pointer}
     </div>
     <div class="stack">
       <div class="card"><div id="scatter"></div></div>
+      <div class="card" id="pathcard" hidden><h2>Decision variables of the selected solution</h2><div id="pathway"></div></div>
       <div class="card"><h2>All objectives at once</h2><div id="parcoords"></div></div>
       <div class="card"><h2>Top 10 for your priorities</h2><div class="tablewrap"><table id="tbl"></table></div></div>
     </div>
@@ -155,7 +159,8 @@ function detail(i, score) {
   document.getElementById("dtitle").textContent = `${t} #${i}`;
   let h = D.names.map((nm, j) => `<div><span>${lab(j)}</span><span>${fmt(D.F[i][j])}</span></div>`).join("");
   h += `<div><span>Score</span><span>${score[i].toFixed(3)}</span></div>`;
-  if (D.X) {
+  if (D.X && D.series) { pathway(i, score); }
+  else if (D.X) {
     const k = Math.min(8, D.varNames.length);
     h += D.varNames.slice(0, k).map((nm, j) => `<div><span>${nm}</span><span>${fmt(D.X[i][j])}</span></div>`).join("");
     if (D.varNames.length > k) h += `<div><span>+ ${D.varNames.length - k} more variables</span><span></span></div>`;
@@ -192,6 +197,21 @@ function draw() {
 
   detail(pinned ?? best, score);
   table(score);
+}
+
+function pathway(i, score) {
+  document.getElementById("pathcard").hidden = false;
+  const best = score.indexOf(Math.max(...score));
+  const ink = css("--ink"), grid = css("--grid");
+  const line = (k, c, dash, name, w) => ({ x: D.varNames, y: D.X[k], mode: "lines+markers", name,
+    line: { color: c, dash, width: w }, marker: { size: w + 2 } });
+  const tr = [line(i, css("--accent"), "solid", `selected (#${i})`, 3)];
+  if (D.knee !== i) tr.push(line(D.knee, css("--knee"), "dash", `knee (#${D.knee})`, 2));
+  if (best !== i && best !== D.knee) tr.push(line(best, css("--pick"), "dot", `best for weights (#${best})`, 2));
+  Plotly.react("pathway", tr, { paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)", font: { color: ink, size: 12 },
+    margin: { l: 70, r: 20, t: 10, b: 45 }, legend: { orientation: "h", y: 1.12 },
+    xaxis: { type: "category", gridcolor: grid, linecolor: grid }, yaxis: { title: { text: D.varLabel }, gridcolor: grid, zerolinecolor: grid } },
+    { responsive: true, displaylogo: false });
 }
 
 function table(score) {

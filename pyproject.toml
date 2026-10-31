@@ -21,7 +21,8 @@ classifiers = [
 
 [project.optional-dependencies]
 pymoo = ["pymoo>=0.6"]
-dev = ["pytest", "pymoo>=0.6"]
+excel = ["openpyxl"]
+dev = ["pytest", "pymoo>=0.6", "openpyxl"]
 
 [project.scripts]
 paretolens = "paretolens.cli:main"

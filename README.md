@@ -14,29 +14,62 @@ Optimisers like NSGA-II hand you back a cloud of trade-off solutions. The hard p
 pip install git+https://github.com/Thashmikab/paretolens.git
 # with pymoo for the examples
 pip install "paretolens[pymoo] @ git+https://github.com/Thashmikab/paretolens.git"
+# for Excel files
+pip install "paretolens[excel] @ git+https://github.com/Thashmikab/paretolens.git"
 ```
 
-## Use it in three lines
+## Use it
+
+### Straight after a pymoo run
 
 ```python
 from paretolens import Front
 
-front = Front.from_csv("results.csv", objectives={"cost": "min", "co2": "min", "energy": "max"})
-print(front.summary())                       # extremes, knee and best compromise
-front.to_html("report.html")                 # interactive explorer
+res = minimize(problem, NSGA2(pop_size=100), ("n_gen", 200))
+
+# pymoo always minimises. If you maximised something by returning -f,
+# mark it "max" and paretolens flips it back to its real value.
+front = Front.from_pymoo(res, names=["cost", "co2", "energy"], senses=["min", "min", "max"])
+
+front.summary()                 # extremes, knee and best compromise
+front.to_html("report.html")    # interactive explorer
 ```
 
-Straight from a pymoo run:
+### From results you saved to a file
+
+The only rule is **one row per solution, one column per objective**. Any other columns, such as decision variables or an id, are optional.
+
+| solution_id | cost | co2 | energy | x1 | x2 | … |
+|---|---|---|---|---|---|---|
+| 0 | 1.2e6 | 340 | 5100 | … | … | |
+| 1 | 1.4e6 | 310 | 5600 | … | … | |
 
 ```python
-res = minimize(problem, NSGA2(pop_size=100), ("n_gen", 200))
-front = Front.from_pymoo(res, names=["cost", "co2"])
+# CSV
+front = Front.from_csv("results.csv", objectives={"cost": "min", "co2": "min", "energy": "max"})
+
+# Excel, everything on one sheet
+front = Front.from_excel("results.xlsx", objectives={"cost": "min", "co2": "min"},
+                         sheet="results", variables=["x1", "x2"])
+
+# Excel, objectives and decision variables on separate sheets, matched by an id column
+front = Front.from_excel("results.xlsx", objectives={"cost": "min", "co2": "min"},
+                         sheet="objectives", variables_sheet="decisions", on="solution_id")
+
+# Already have a DataFrame?
+front = Front.from_dataframe(df, objectives={"cost": "min", "co2": "min"})
 ```
 
-From the command line:
+Two options help with common exports:
+
+- **`negated=["energy"]`** is for columns saved with their sign flipped. pymoo does this for a maximised objective (`-f`), so this turns them back into real values.
+- **`series=True, var_label="New capacity (MW)"`** is for when the decision variables are an ordered series, such as capacity added each year. The report then draws each solution as a line over time and overlays the knee and the best pick.
+
+### From the command line
 
 ```bash
-paretolens results.csv --min cost --min co2 --max energy -o report.html
+paretolens results.csv  --min cost --min co2 --max energy -o report.html
+paretolens results.xlsx --sheet objectives --min cost --max energy --negate energy
 ```
 
 ## What it gives you
