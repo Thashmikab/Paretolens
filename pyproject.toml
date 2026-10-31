@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "paretolens"
+version = "0.1.0"
+description = "Explore, compare and pick solutions from multi-objective Pareto fronts, with an interactive HTML report."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Thashmika Bandara" }]
+requires-python = ">=3.9"
+dependencies = ["numpy>=1.21", "pandas>=1.3"]
+keywords = ["pareto", "multi-objective", "optimisation", "nsga-ii", "pymoo", "topsis", "decision-making"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering",
+]
+
+[project.optional-dependencies]
+pymoo = ["pymoo>=0.6"]
+dev = ["pytest", "pymoo>=0.6"]
+
+[project.scripts]
+paretolens = "paretolens.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Thashmikab/paretolens"
+
+[tool.setuptools.packages.find]
+where = ["src"]
