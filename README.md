@@ -4,9 +4,15 @@
 
 Optimisers like NSGA-II hand you back a cloud of trade-off solutions. The hard part comes next. You have to decide which one to recommend and explain why. `paretolens` turns that front into something you can reason with. It finds the knee point, ranks solutions for any set of priorities and writes an interactive HTML page you can share with colleagues who don't use Python.
 
-[**▶ Live demo**](https://thashmikab.github.io/paretolens/) · works with [pymoo](https://pymoo.org), CSV files or any NumPy array
+[**▶ Live demo**](https://thashmikab.github.io/paretolens/) · [ZDT1 report](https://thashmikab.github.io/paretolens/zdt1.html) · [3-objective report](https://thashmikab.github.io/paretolens/dtlz2.html) · works with [pymoo](https://pymoo.org), CSV, Excel or any NumPy array
+
+<p align="center"><img src="docs/explainer.gif" alt="Animation: a population is filtered to its Pareto front, the knee is marked, and the best solution moves as priorities change" width="760"></p>
+
+<details><summary>What the interactive report looks like</summary>
 
 ![paretolens report](docs/screenshot.png)
+
+</details>
 
 ## Install
 
